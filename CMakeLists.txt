@@ -3,7 +3,10 @@ project(fusion_slam)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g")
 set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fsanitize=address")
-set(CMAKE_CXX_FLAGS "-std=c++17 -O3" )
+set(CMAKE_CXX_FLAGS "-std=c++17 -O3" ) # violence speed up! best
+# set(CMAKE_CXX_FLAGS "-std=c++17 -Ofast") # better
+# set(CMAKE_CXX_FLAGS "-std=c++17 -Ofast -march=native -funroll-loops") # better
+# add_compile_options(-std=c++17)
 add_definitions(-DROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)

@@ -54,9 +54,12 @@ bool Front::run(){
             auto state = ieskfPtr->getX();
             auto pos = state.position;
             auto rot = state.rotation;
-            mapPtr->addPcdAndUpdateLocalMap(msg.mapDatas[msg.lidarBeginTime].cloud.cloudPtr, rot, pos);
+            // mapPtr->addPcdAndUpdateLocalMap(msg.mapDatas[msg.lidarBeginTime].cloud.cloudPtr, rot, pos);
+            nearstPoints.resize(msg.mapDatas[msg.lidarBeginTime].cloud.cloudPtr->points.size());
+            mapPtr->addPcdAndUpdateLocalMap(msg.mapDatas[msg.lidarBeginTime].cloud.cloudPtr, state.rotation, state.position, nearstPoints);
             return false;
         }
+        // LOG(INFO) << std::fixed << " lidarBeginTime: " << double(msg.lidarBeginTime*1e-9);
         auto t0 = GetCurrentTime::nowUs();
         propagatePtr->run(msg, ieskfPtr);
         auto t1 = GetCurrentTime::nowUs();
@@ -70,12 +73,26 @@ bool Front::run(){
         auto t2 = GetCurrentTime::nowUs();
         msg.mapDatas[msg.lidarBeginTime].cloud.cloudPtr = pcdPtrFilterResult;
         auto t3 = GetCurrentTime::nowUs();
-        ieskfPtr->lidarObserve(msg.mapDatas[msg.lidarBeginTime].cloud, mapPtr->readKDtree(), mapPtr->getLocalMap());
+        nearstPoints.resize(pcdPtrFilterResult->points.size());
+        // ieskfPtr->lidarObserve(msg.mapDatas[msg.lidarBeginTime].cloud, mapPtr->readKDtree(), mapPtr->getLocalMap());
+        ieskfPtr->lidarObserve(msg.mapDatas[msg.lidarBeginTime].cloud, mapPtr->readIkdtree(), mapPtr->getLocalMap(), nearstPoints);
         auto t4 = GetCurrentTime::nowUs();
+        if(0) // If you need to see map point, change to "if(1)"
+        {
+            PCLPointCloudPtr featsFromMap = pcl::make_shared<PCLPointCloud>();
+            auto ikdtree = mapPtr->readIkdtree();
+            IKDTree::PointVector ().swap(ikdtree->PCL_Storage);
+            ikdtree->flatten(ikdtree->Root_Node, ikdtree->PCL_Storage, NOT_RECORD);
+            featsFromMap->clear();
+            featsFromMap->points = ikdtree->PCL_Storage;
+            // LOG(INFO) << "featsFromMap->points.size(): " << featsFromMap->points.size() << endl;
+        }
         auto state = ieskfPtr->getX();
         auto t5 = GetCurrentTime::nowUs();
-        mapPtr->addPcdAndUpdateLocalMap(pcdPtrFilterResult, state.rotation, state.position);
+        // mapPtr->addPcdAndUpdateLocalMap(pcdPtrFilterResult, state.rotation, state.position);
+        mapPtr->addPcdAndUpdateLocalMap(msg.mapDatas[msg.lidarBeginTime].cloud.cloudPtr, state.rotation, state.position, nearstPoints);
         auto t6 = GetCurrentTime::nowUs();
+        // LOG(INFO) << "propagate: " << (t1 - t0)*0.000001  << " lidar observe: " << (t4 - t3)*0.000001 <<  " update map: " << (t6 - t5)*0.000001 << std::endl;
         return true;
     }
     return false;

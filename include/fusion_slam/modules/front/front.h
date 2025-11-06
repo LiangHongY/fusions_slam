@@ -32,6 +32,7 @@ private:
     PCLPointCloudPtr pcdPtrFilterResult;
     bool initUseRtk;
     double imuInitDuration;
+    std::vector<IKDTree::PointVector> nearstPoints;
 
 public:
     using Ptr = std::shared_ptr<Front>;

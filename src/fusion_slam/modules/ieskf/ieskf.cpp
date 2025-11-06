@@ -154,6 +154,122 @@ bool IESKF::lidarObserve(const PointCloud& cloud, const KDTreeConstPtr& mapKdtre
     return converge;
 }
 
+bool IESKF::lidarObserve(const PointCloud& cloud, const IKDTreePtr& mapIkdtreePtr, const PCLPointCloudConstPtr& mapPtr, std::vector<IKDTree::PointVector>& nearPoints) {
+    if(cloud.timeStamp.sec() < X.timestamp.sec()) return false;
+    globalMapIkdtreePtr = mapIkdtreePtr;
+    curCloudPtr = cloud.cloudPtr;
+    localMapPtr = mapPtr;
+
+    auto curX = X;
+    Eigen::MatrixXd K;
+    Eigen::MatrixXd curH;
+    Eigen::Matrix<double, 18, 18> curP;
+    bool converge = true;
+    for (int i = 0; i < iterTimes; i++) {
+        Eigen::Matrix<double, 18, 1> errorState = getErrorStateX(curX, X);
+        Eigen::Matrix<double, 18, 18> J_inv;
+        J_inv.setIdentity();
+        J_inv.block<3, 3>(0, 0) = J_right(errorState.block<3, 1>(0, 0));
+        curP = J_inv * P * J_inv.transpose();
+        Eigen::MatrixXd curZ;
+        calculateLidarZH(curX, curZ, curH, nearPoints);
+        Eigen::MatrixXd curHT = curH.transpose();
+        K = (curHT * curH + (curP / 0.001).inverse()).inverse() * curHT;
+        Eigen::MatrixXd left = -1 * K * curZ;
+        Eigen::MatrixXd right =
+            -1 * (Eigen::Matrix<double, 18, 18>::Identity() - K * curH) * J_inv * errorState;
+        Eigen::MatrixXd updateX = left + right;
+
+        converge = true;
+        for (int idx = 0; idx < 18; idx++) {
+            if (updateX(idx, 0) > 0.001) {
+                converge = false;
+                break;
+            }
+        }
+        curX.rotation = Eigen::Quaterniond(curX.rotation.toRotationMatrix() * so3Exp(updateX.block<3, 1>(0, 0)));
+        curX.rotation.normalize();
+        curX.position = curX.position + updateX.block<3, 1>(3, 0);
+        curX.velocity = curX.velocity + updateX.block<3, 1>(6, 0);
+        curX.bg = curX.bg + updateX.block<3, 1>(9, 0);
+        curX.ba = curX.ba + updateX.block<3, 1>(12, 0);
+        curX.gravity = curX.gravity + updateX.block<3, 1>(15, 0);
+        if (converge) {
+            break;
+        }
+    }
+    X = curX;
+    P = (Eigen::Matrix<double, 18, 18>::Identity() - K * curH) * curP;
+    X.timestamp.fromSec(cloud.timeStamp.sec());
+    return converge;
+}
+
+bool IESKF::calculateLidarZH(const StateX& state, Eigen::MatrixXd& Z, Eigen::MatrixXd& H, std::vector<IKDTree::PointVector>& nearPoints){
+    // LOG(INFO) << "nearPoints size " << nearPoints.size() ;
+    std::vector<lossType> lossV;
+    lossV.resize(curCloudPtr->size());
+    std::vector<bool> isEffectPoint(curCloudPtr->size(),false);
+    std::vector<lossType> lossReal;
+    int  vaildPointsNum = 0;
+    #ifdef MP_EN
+        omp_set_num_threads(MP_PROC_NUM);
+        #pragma omp parallel for
+    #endif
+    for (size_t  i = 0; i < curCloudPtr->size(); i++)
+    {
+        PointType imuPoint = curCloudPtr->points[i];
+        PointType globalPoint;
+        globalPoint = transformPoint(imuPoint, state.rotation, state.position);
+        auto& pointsNear = nearPoints[i];
+        std::vector<float> pointSearchSqDis(NEAR_POINTS_NUM);
+        globalMapIkdtreePtr->Nearest_Search(globalPoint, NEAR_POINTS_NUM, pointsNear, pointSearchSqDis);
+        if (pointsNear.size()<NEAR_POINTS_NUM || pointSearchSqDis[NEAR_POINTS_NUM-1]>5)
+        {
+            continue;
+        }
+        std::vector<PointType> planarPoints;
+        for (int ni = 0; ni < NEAR_POINTS_NUM; ni++)
+        {
+            PointType point;
+            point = pointsNear[ni];
+            planarPoints.emplace_back(point);
+        }
+        Eigen::Vector4d pabcd;
+        if (planarCheck(planarPoints,pabcd,0.1))    
+        {
+            double pd = globalPoint.x*pabcd(0)+globalPoint.y*pabcd(1)+globalPoint.z*pabcd(2)+pabcd(3);
+            lossType loss;
+            loss.thrid = pd;
+            loss.first = {imuPoint.x, imuPoint.y, imuPoint.z};
+            loss.second = pabcd.block<3,1>(0,0);
+            if (isnan(pd)||isnan(loss.second(0))||isnan(loss.second(1))||isnan(loss.second(2)))continue;
+            double s = 1 - 0.9 * fabs(pd) / sqrt(loss.first.norm());
+            if(s > 0.9 ){
+                vaildPointsNum++;
+                lossV[i] = loss;
+                isEffectPoint[i] = true;
+            }
+        }
+
+    }
+    for (size_t i = 0; i <curCloudPtr->size(); i++)
+    {
+        if(isEffectPoint[i]) lossReal.emplace_back(lossV[i]);
+    }
+    vaildPointsNum = lossReal.size();
+    // LOG(INFO) << "vaildPointsNum " << vaildPointsNum;
+    H = Eigen::MatrixXd::Zero(vaildPointsNum, 18); 
+    Z.resize(vaildPointsNum,1);
+    for (int vi = 0; vi < vaildPointsNum; vi++)
+    {
+        Eigen::Vector3d dr = -1*lossReal[vi].second.transpose()*state.rotation.toRotationMatrix()*skewSymmetric(lossReal[vi].first);
+        H.block<1,3>(vi,0) = dr.transpose();
+        H.block<1,3>(vi,3) = lossReal[vi].second.transpose();
+        Z(vi,0) = lossReal[vi].thrid;
+    }
+    return true;
+}
+
 bool IESKF::calculateLidarZH(const StateX& state, Eigen::MatrixXd& Z, Eigen::MatrixXd& H){
     std::vector<lossType> lossV;
     lossV.resize(curCloudPtr->size());

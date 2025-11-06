@@ -18,6 +18,7 @@ class Map{
 private:
     PCLPointCloudPtr localMapPtr;
     KDTreePtr kdtreePtr;
+    IKDTreePtr ikdtreePtr;
     double mapResolution;
     double halfLocalMapLength;
     bool saveMap;
@@ -26,14 +27,29 @@ private:
     PCLPointCloudPtr globalCloudPtr;
     PCLPointCloudPtr globalMapFilterResultPtr;
     VoxelFilter globalMapPtrFilter;
+
+    // ikdtree fastlio
+    vector<BoxPointType> cubNeedrm;
+    BoxPointType localMapPoints;
+    bool localmapInitialized;
+    double cubeLen;
+    float MOV_THRESHOLD;
+    float DET_RANGE;
+    double filterSizeMapMin;
+    float calcDist(PointType p1, PointType p2);
+    void lasermapFovSegment(const Eigen::Vector3d& pose);
+    void mapIncremental(PCLPointCloudPtr& cloud, const Eigen::Quaterniond& rot, const Eigen::Vector3d& pose, const std::vector<IKDTree::PointVector>& nearstPoints);
+
 public:
     using Ptr = std::shared_ptr<Map>;
     Map(const std::string &configPath);
     ~Map();
     int addPcdAndUpdateLocalMap(PCLPointCloudPtr& cloud, const Eigen::Quaterniond& rot, const Eigen::Vector3d& pose);
+    int addPcdAndUpdateLocalMap(PCLPointCloudPtr& cloud, const Eigen::Quaterniond& rot, const Eigen::Vector3d& pose, const std::vector<IKDTree::PointVector>& nearstPoints);
     int reset();
     PCLPointCloudConstPtr getLocalMap();
     KDTreeConstPtr readKDtree();
+    IKDTreePtr readIkdtree();
     void saveGlobalMap();
 };
 #endif

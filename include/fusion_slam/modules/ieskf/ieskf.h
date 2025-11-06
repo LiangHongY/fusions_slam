@@ -63,7 +63,9 @@ class IESKF{
         KDTreeConstPtr globalMapKdtreePtr;
         PCLPointCloudPtr curCloudPtr;
         PCLPointCloudConstPtr localMapPtr;
+        IKDTreePtr globalMapIkdtreePtr;
         bool calculateLidarZH(const StateX& state, Eigen::MatrixXd& Z, Eigen::MatrixXd& H);
+        bool calculateLidarZH(const StateX& state, Eigen::MatrixXd& Z, Eigen::MatrixXd& H, std::vector<IKDTree::PointVector>& nearPoints);
 
     public:
         IESKF(const std::string& configPath);
@@ -71,6 +73,7 @@ class IESKF{
         using Ptr = std::shared_ptr<IESKF>;
         void predict(const ImuType& imuData);
         bool lidarObserve(const PointCloud& cloud, const KDTreeConstPtr& mapKdtreePtr, const PCLPointCloudConstPtr& mapPtr);
+        bool lidarObserve(const PointCloud& cloud, const IKDTreePtr& mapIkdtreePtr, const PCLPointCloudConstPtr& mapPtr, std::vector<IKDTree::PointVector>& nearPoints);
         int rotationObserve(const Rot& rot, const Eigen::Vector3d& nosie);
         int positionObserve(const Pos& pos, const Eigen::Vector3d& nosie);
         int velocityObserve(const Velocity& vel, const Eigen::Vector3d& nosie);

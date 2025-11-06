@@ -11,6 +11,16 @@
 #include <pcl/kdtree/impl/kdtree_flann.hpp>
 #include <pcl/filters/impl/voxel_grid.hpp>
 #include "fusion_slam/type/point_type.h"
+#include "ikd-Tree/ikd_Tree.hpp"
+#include "ivox3d/ivox3d.h"
+
+using IKDTree = KD_TREE<PointType>;
+using IKDTreePtr = IKDTree::Ptr;
+using IKDTreeConstPtr = std::shared_ptr<const IKDTree>;
+
+// using IVoxelGrid = IVox3D<PointType>;
+// using IVoxelGridPtr = IVoxelGrid::Ptr;
+
 using VoxelFilter = pcl::VoxelGrid<PointType>;
 using KDTree = pcl::KdTreeFLANN<PointType>;
 using KDTreePtr = KDTree::Ptr;

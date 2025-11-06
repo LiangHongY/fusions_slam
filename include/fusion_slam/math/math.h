@@ -38,19 +38,20 @@ static bool planarCheck(const std::vector<pointTypeT>& points, Eigen::Vector4d &
 
     normalVector = A.colPivHouseholderQr().solve(B);
 
+    double normal = normalVector.norm();
+    // normalVector.normalize();
+    pabcd(0) = normalVector(0)/normal;
+    pabcd(1) = normalVector(1)/normal;
+    pabcd(2) = normalVector(2)/normal;
+    pabcd(3) = 1.0/normal;
+
     for (int j = 0; j < pointsSize; j++)
     {
-        if (fabs(normalVector(0) * points[j].x + normalVector(1) * points[j].y + normalVector(2) * points[j].z + 1.0f) > threhold)
+        if (fabs(pabcd(0) * points[j].x + pabcd(1) * points[j].y + pabcd(2) * points[j].z + pabcd(3)) > threhold)
         {
             return false;
         }
     }
-    double normal = normalVector.norm();
-    normalVector.normalize();
-    pabcd(0) = normalVector(0);
-    pabcd(1) = normalVector(1);
-    pabcd(2) = normalVector(2);
-    pabcd(3) = 1/normal;
 
     return true;
 
