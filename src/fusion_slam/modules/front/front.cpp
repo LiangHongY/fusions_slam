@@ -165,6 +165,10 @@ bool Front::syncMeasureGroupAdd(MeasureGroupAdd& msg){
     }
     msg.lidarBeginTime = clouds.front().timeStamp.nsec();
     msg.lidarEndTime = clouds.front().cloudPtr->back().offset_time + msg.lidarBeginTime;
+    if(msg.lidarBeginTime >= msg.lidarEndTime) {
+        LOG(INFO) << "Error, offset_time is <= 0! Check Lidar point offset_time!";
+        return false;
+    }
     if(imus.front().timeStamp.nsec() > msg.lidarEndTime){
         clouds.pop_front();
         return false;
